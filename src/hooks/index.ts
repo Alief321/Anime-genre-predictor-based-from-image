@@ -1,0 +1,1 @@
+export { useAnimeGenrePredictor } from './useAnimeGenrePredictor';
