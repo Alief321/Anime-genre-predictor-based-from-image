@@ -15,7 +15,7 @@ interface AnimeGenrePredictorProps {
 export const AnimeGenrePredictor = ({ modelUrl, onPredictionComplete }: AnimeGenrePredictorProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
-  const { isLoading, isModelLoading, predictions, error, processingTime, predictFromImage, clearPredictions, clearError, isModelReady } = useAnimeGenrePredictor(modelUrl);
+  const { isLoading, isModelLoading, predictions, error, processingTime, predictFromImage, clearPredictions, isModelReady } = useAnimeGenrePredictor(modelUrl);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

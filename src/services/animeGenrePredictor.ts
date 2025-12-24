@@ -110,54 +110,44 @@ class AnimeGenrePredictorService {
 
     const startTime = performance.now();
 
-    return tf.tidy(() => {
-      try {
-        // 1. Baca gambar dari File
-        const reader = new FileReader();
-
-        return new Promise((resolve, reject) => {
-          reader.onload = (event) => {
-            try {
-              const img = new Image();
-              img.onload = () => {
-                const tensor = this.preprocessImage(img);
-                const predictions = this.model!.predict(tensor) as tf.Tensor;
-                const predictionArray = predictions.dataSync();
-                const processingTime = performance.now() - startTime;
-
-                // Konversi hasil prediksi ke array dengan genre names
-                const results = this.formatPredictions(predictionArray);
-
-                // Cleanup tensors
-                tensor.dispose();
-                predictions.dispose();
-
-                resolve({
-                  predictions: results,
-                  processingTime,
-                });
-              };
-
-              img.onerror = () => {
-                reject(new Error('Gagal membaca gambar'));
-              };
-
-              img.src = event.target?.result as string;
-            } catch (error) {
-              reject(error);
-            }
-          };
-
-          reader.onerror = () => {
-            reject(new Error('Gagal membaca file'));
-          };
-
-          reader.readAsDataURL(imageFile);
-        });
-      } catch (error) {
-        throw error;
-      }
+    // Baca file menjadi data URL
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (typeof result === 'string') {
+          resolve(result);
+        } else {
+          reject(new Error('Gagal membaca file'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Gagal membaca file'));
+      reader.readAsDataURL(imageFile);
     });
+
+    // Load image dari data URL
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Gagal membaca gambar'));
+      image.src = dataUrl;
+    });
+
+    // Proses gambar dan prediksi
+    const tensor = this.preprocessImage(img);
+    const predictions = this.model.predict(tensor) as tf.Tensor;
+    const predictionArray = predictions.dataSync() as Float32Array;
+    const processingTime = performance.now() - startTime;
+
+    const results = this.formatPredictions(predictionArray);
+
+    tensor.dispose();
+    predictions.dispose();
+
+    return {
+      predictions: results,
+      processingTime,
+    };
   }
 
   /**
@@ -179,7 +169,7 @@ class AnimeGenrePredictorService {
           try {
             const tensor = this.preprocessImage(img);
             const predictions = this.model!.predict(tensor) as tf.Tensor;
-            const predictionArray = predictions.dataSync();
+            const predictionArray = predictions.dataSync() as Float32Array;
             const processingTime = performance.now() - startTime;
 
             const results = this.formatPredictions(predictionArray);
@@ -208,21 +198,13 @@ class AnimeGenrePredictorService {
   /**
    * Preprocess gambar untuk model
    */
-  private preprocessImage(img: HTMLImageElement): tf.Tensor {
+  private preprocessImage(img: HTMLImageElement): tf.Tensor4D {
     return tf.tidy(() => {
-      // Convert gambar ke tensor
-      let tensor = tf.browser.fromPixels(img);
-
-      // Resize ke ukuran yang diharapkan model
-      tensor = tf.image.resizeBilinear(tensor, [this.imageSize, this.imageSize]);
-
-      // Normalize pixel values ke range 0-1 atau -1 to 1 tergantung model
-      tensor = tensor.div(tf.scalar(255));
-
-      // Tambahkan batch dimension jika diperlukan
-      tensor = tensor.expandDims(0) as tf.Tensor4D;
-
-      return tensor;
+      const tensor3d = tf.browser.fromPixels(img).toFloat();
+      const resized = tf.image.resizeBilinear(tensor3d, [this.imageSize, this.imageSize]);
+      const normalized = resized.div(tf.scalar(255));
+      const batched = normalized.expandDims(0) as tf.Tensor4D;
+      return batched;
     });
   }
 
